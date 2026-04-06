@@ -85,14 +85,40 @@ int run_supervisor(char *rootfs_path) {
     }
     return 0;
 }
-
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s supervisor <rootfs>\n", argv[0]);
+        printf("Usage: %s <supervisor|run> [args]\n", argv[0]);
         return 1;
     }
+
     if (strcmp(argv[1], "supervisor") == 0) {
         return run_supervisor(argv[2]);
+    } 
+    
+    if (strcmp(argv[1], "run") == 0) {
+        // This part sends the command to the supervisor
+        control_request_t req;
+        memset(&req, 0, sizeof(req));
+        req.kind = CMD_RUN;
+        strncpy(req.container_id, argv[2], 31);
+        strncpy(req.rootfs, argv[3], 255);
+        strncpy(req.command, argv[4], 255);
+        
+        // Memory limits (defaulting to 50MB for test)
+        req.soft_limit_bytes = 50 * 1024 * 1024;
+        req.hard_limit_bytes = 80 * 1024 * 1024;
+
+        int fd = open(FIFO_PATH, O_WRONLY);
+        if (fd < 0) {
+            perror("Is the supervisor running?");
+            return 1;
+        }
+        write(fd, &req, sizeof(req));
+        close(fd);
+        printf("Sent run request for %s to supervisor\n", argv[2]);
+        return 0;
     }
+
     return 0;
 }
+
