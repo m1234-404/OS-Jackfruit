@@ -6,7 +6,6 @@
 #include <linux/mm.h>
 #include <linux/kthread.h>
 #include <linux/slab.h>
-#include <linux/uaccess.h>
 #include <linux/delay.h>
 #include "monitor_ioctl.h"
 
@@ -22,7 +21,6 @@ static LIST_HEAD(proc_list);
 static DEFINE_MUTEX(list_lock);
 static struct task_struct *monitor_thread;
 
-// Helper: Calculate actual physical memory (RSS) in bytes
 static unsigned long get_process_rss(struct task_struct *task) {
     struct mm_struct *mm = get_task_mm(task);
     unsigned long rss = 0;
@@ -33,7 +31,6 @@ static unsigned long get_process_rss(struct task_struct *task) {
     return rss;
 }
 
-// The Kernel Thread: Background memory checking
 static int monitor_loop(void *data) {
     struct monitored_proc *curr, *tmp;
     while (!kthread_should_stop()) {
@@ -45,19 +42,13 @@ static int monitor_loop(void *data) {
                 kfree(curr);
                 continue;
             }
-            
             unsigned long rss = get_process_rss(task);
             if (rss > curr->hard_limit) {
-                pr_emerg("MONITOR: PID %d exceeded HARD limit (%lu > %lu). KILLING.\n", 
-                         curr->pid, rss, curr->hard_limit);
                 send_sig(SIGKILL, task, 0);
-            } else if (rss > curr->soft_limit) {
-                pr_warn("MONITOR: PID %d exceeded SOFT limit (%lu > %lu).\n", 
-                        curr->pid, rss, curr->soft_limit);
             }
         }
         mutex_unlock(&list_lock);
-        msleep(1000); // Check every second
+        msleep(1000);
     }
     return 0;
 }
@@ -65,7 +56,6 @@ static int monitor_loop(void *data) {
 static long monitor_ioctl(struct file *file, unsigned int cmd, unsigned long arg) {
     struct monitor_request req;
     struct monitored_proc *new_node;
-
     if (copy_from_user(&req, (void __user *)arg, sizeof(req))) return -EFAULT;
 
     mutex_lock(&list_lock);
@@ -76,14 +66,6 @@ static long monitor_ioctl(struct file *file, unsigned int cmd, unsigned long arg
         new_node->hard_limit = req.hard_limit_bytes;
         strncpy(new_node->container_id, req.container_id, 31);
         list_add(&new_node->list, &proc_list);
-    } else if (cmd == MONITOR_UNREGISTER) {
-        struct monitored_proc *curr, *tmp;
-        list_for_each_entry_safe(curr, tmp, &proc_list, list) {
-            if (curr->pid == req.pid) {
-                list_del(&curr->list);
-                kfree(curr);
-            }
-        }
     }
     mutex_unlock(&list_lock);
     return 0;
