@@ -2,29 +2,20 @@
 #define MONITOR_IOCTL_H
 
 #include <linux/ioctl.h>
+#include <linux/types.h>
 
-// This part hides the user-space headers from the kernel
-#ifndef __KERNEL__
-#include <sys/types.h>
-#endif
-
-// Define types that work for both kernel and user-space
-typedef struct { char id[32], rootfs[256], command[256]; } child_config_t;
-typedef enum { CMD_RUN = 2, CMD_PS = 3, CMD_STOP = 5 } command_kind_t;
-
-typedef struct {
-    command_kind_t kind;
-    char container_id[32], rootfs[256], command[256];
-    unsigned long soft_limit_bytes, hard_limit_bytes;
-} control_request_t;
+#define MONITOR_NAME_LEN 32
 
 struct monitor_request {
-    int pid; // Changed pid_t to int for better kernel/user compatibility
-    unsigned long soft_limit_bytes, hard_limit_bytes;
-    char container_id[32];
-};
+    int32_t pid;
+    uint32_t padding; 
+    uint64_t soft_limit_bytes;
+    uint64_t hard_limit_bytes;
+    char container_id[MONITOR_NAME_LEN];
+} __attribute__((packed, aligned(8)));
 
-#define MONITOR_MAGIC 'm'
+#define MONITOR_MAGIC 'M'
 #define MONITOR_REGISTER _IOW(MONITOR_MAGIC, 1, struct monitor_request)
+#define MONITOR_UNREGISTER _IOW(MONITOR_MAGIC, 2, struct monitor_request)
 
 #endif
